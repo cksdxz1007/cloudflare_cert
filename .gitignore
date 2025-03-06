@@ -1,0 +1,17 @@
+# Python 编译文件
+__pycache__/
+*.py[cod]
+
+# 排除测试文件
+test.py
+
+# 排除可能包含敏感信息的文件
+/etc/cloudflare/env
+*.env
+*.key
+*.pem
+*.crt
+*.fingerprint
+
+# 日志文件
+*.log
