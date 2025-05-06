@@ -251,10 +251,7 @@ if [[ "$create_cert" =~ ^[Yy]$ ]]; then
       --cert_dir /etc/cert/
     
     if [ $? -eq 0 ]; then
-        print_info "证书创建成功！"
-        echo "证书文件保存在: /etc/cert/$hostname.crt"
-        echo "密钥文件保存在: /etc/cert/$hostname.key"
-        echo "指纹文件保存在: /etc/cert/$hostname.fingerprint"
+        print_info "证书创建成功！文件已保存到 /etc/cert/ 目录。"
     else
         print_error "证书创建失败！请检查日志文件: /var/log/cert_update.log"
     fi
