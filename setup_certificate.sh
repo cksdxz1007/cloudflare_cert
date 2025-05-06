@@ -239,8 +239,16 @@ if [[ "$create_cert" =~ ^[Yy]$ ]]; then
     # 获取脚本路径
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     
-    # 执行证书创建脚本
-    source /etc/cloudflare/env && $script_dir/update_certificate.sh
+    # 确保环境变量已加载
+    source /etc/cloudflare/env
+    
+    # 显式传递所有参数直接调用 Python 脚本，避免环境变量传递问题
+    $PYTHON_CMD $script_dir/cloudflare_cert_token.py \
+      --origin-ca-key "$CLOUDFLARE_ORIGIN_CA_KEY" \
+      --domain "$CERT_DOMAIN" \
+      --hostnames $CERT_HOSTNAME \
+      --zone_id "$CF_ZONE_ID" \
+      --cert_dir /etc/cert/
     
     if [ $? -eq 0 ]; then
         print_info "证书创建成功！"

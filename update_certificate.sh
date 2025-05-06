@@ -58,8 +58,16 @@ NOTIFICATION_EMAIL=${NOTIFICATION_EMAIL:-""}
 # 确保证书目录存在
 mkdir -p /etc/cert/
 
-# 执行证书更新脚本
-$PYTHON_CMD cloudflare_cert_token.py --domain $CERT_DOMAIN --hostnames $CERT_HOSTNAME --cert_dir /etc/cert/ >> $LOG_FILE 2>&1
+# 增加调试信息
+echo "调试信息: CLOUDFLARE_ORIGIN_CA_KEY=${CLOUDFLARE_ORIGIN_CA_KEY:0:10}..." >> $LOG_FILE
+
+# 显式传递所有参数给 Python 脚本
+$PYTHON_CMD cloudflare_cert_token.py \
+  --origin-ca-key "$CLOUDFLARE_ORIGIN_CA_KEY" \
+  --domain "$CERT_DOMAIN" \
+  --hostnames $CERT_HOSTNAME \
+  --zone_id "$CF_ZONE_ID" \
+  --cert_dir /etc/cert/ >> $LOG_FILE 2>&1
 
 # 检查执行结果
 if [ $? -eq 0 ]; then
