@@ -32,10 +32,11 @@ sudo ./setup_certificate.sh
 ```
 
 这个向导将引导您：
-1. 输入必要的参数（Cloudflare Origin CA Key、域名和主机名）
-2. 创建环境变量文件
-3. 设置计划任务（可选）
-4. 立即创建证书（可选）
+1. 输入必要的参数（Cloudflare Origin CA Key、域名和主机名【支持多个，空格分隔】）
+2. 通过 Cloudflare API 自动获取 zoneID
+3. 创建环境变量文件
+4. 设置计划任务（可选）
+5. 立即创建证书（可选）
 
 ### 环境变量配置
 
@@ -52,8 +53,9 @@ sudo chmod 600 /etc/cloudflare/env
 ```bash
 CLOUDFLARE_ORIGIN_CA_KEY="your-origin-ca-key"
 CERT_DOMAIN="example.com"
-CERT_HOSTNAME="www.example.com"
+CERT_HOSTNAME="www.example.com api.example.com"  # 支持多个主机名，空格分隔
 NOTIFICATION_EMAIL="your-email@example.com"  # 可选
+CF_ZONE_ID="your-zone-id"  # 由脚本自动获取
 ```
 
 ### 手动创建证书
@@ -80,11 +82,12 @@ sudo bash -c 'echo "0 3 1 */3 * root /path/to/update_certificate.sh" >> /etc/cro
 ### Python 脚本参数
 
 - `--domain`: 要管理证书的域名（必需）
-- `--hostnames`: 证书包含的主机名列表（必需）
+- `--hostnames`: 证书包含的主机名列表（必需，支持多个主机名，空格分隔）
 - `--validity`: 证书有效期（天数），默认为 90 天
 - `--type`: 证书类型，可选值：`origin-rsa`（默认）、`origin-ecc`
 - `--cert_dir`: 证书保存目录，默认为 `/etc/cert/`
 - `--origin-ca-key`: Cloudflare Origin CA Key（如果未设置，将从环境变量中读取）
+- `--zone_id`: Cloudflare Zone ID（可选，优先于环境变量 CF_ZONE_ID，通常由脚本自动获取）
 
 ## 获取 Cloudflare Origin CA Key
 
