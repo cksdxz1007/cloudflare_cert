@@ -96,12 +96,95 @@ if ! check_command openssl; then
     exit 1
 fi
 
-# 欢迎信息
-clear
-print_title "Cloudflare 证书管理工具 - 交互式设置"
-echo "这个脚本将帮助您设置 Cloudflare 证书管理系统。"
-echo "您需要提供一些必要的信息，如 Cloudflare Origin CA Key、域名和主机名。"
-echo ""
+# 检查是否已存在环境变量文件
+if [ -f "/etc/cloudflare/env" ]; then
+    print_info "/etc/cloudflare/env 已存在，将直接使用现有配置。"
+    source /etc/cloudflare/env
+else
+    # 收集用户输入
+    print_title "收集必要信息"
+
+    # 获取 Cloudflare Origin CA Key
+    echo "请输入您的 Cloudflare Origin CA Key:"
+    echo "（可以在 Cloudflare 控制面板 > SSL/TLS > Origin Server > Create Certificate 页面底部找到）"
+    read -p "Origin CA Key: " origin_ca_key
+    while [ -z "$origin_ca_key" ]; do
+        print_error "Origin CA Key 不能为空！"
+        read -p "Origin CA Key: " origin_ca_key
+    done
+
+    # 获取域名
+    echo ""
+    echo "请输入您的域名（例如: example.com）:"
+    read -p "域名: " domain
+    while [ -z "$domain" ]; do
+        print_error "域名不能为空！"
+        read -p "域名: " domain
+    done
+
+    # 获取主机名
+    echo ""
+    echo "请输入您的主机名（可输入多个，空格分隔，例如: www.example.com api.example.com）:"
+    read -p "主机名: " hostname
+    while [ -z "$hostname" ]; do
+        print_error "主机名不能为空！"
+        read -p "主机名: " hostname
+    done
+
+    # 获取通知邮箱（可选）
+    echo ""
+    echo "请输入通知邮箱（可选，用于接收证书更新通知）:"
+    read -p "通知邮箱: " email
+
+    # 获取 Cloudflare 邮箱和 Global API Key
+    echo ""
+    echo "请输入您的 Cloudflare 账号邮箱（用于 API 获取 zoneID）:"
+    read -p "Cloudflare 邮箱: " cf_email
+    while [ -z "$cf_email" ]; do
+        print_error "Cloudflare 邮箱不能为空！"
+        read -p "Cloudflare 邮箱: " cf_email
+    done
+
+    echo ""
+    echo "请输入您的 Cloudflare Global API Key（用于 API 获取 zoneID）:"
+    read -s -p "Global API Key: " cf_api_key
+    echo
+    while [ -z "$cf_api_key" ]; do
+        print_error "Global API Key 不能为空！"
+        read -s -p "Global API Key: " cf_api_key
+        echo
+    done
+
+    # 通过 API 获取 zoneID
+    echo "正在通过 Cloudflare API 获取 zoneID..."
+    zone_id=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$domain" \
+        -H "X-Auth-Email: $cf_email" \
+        -H "X-Auth-Key: $cf_api_key" \
+        -H "Content-Type: application/json" | \
+        grep -o '"id":"[a-zA-Z0-9]\{32\}"' | head -n1 | cut -d'"' -f4)
+
+    if [ -z "$zone_id" ]; then
+        print_error "zoneID 获取失败，请检查邮箱、API Key 和域名是否正确！"
+        exit 1
+    else
+        print_info "成功获取 zoneID: $zone_id"
+    fi
+
+    # 创建环境变量文件
+    print_title "创建环境变量文件"
+    cat > /etc/cloudflare/env << EOF
+CLOUDFLARE_ORIGIN_CA_KEY="$origin_ca_key"
+CERT_DOMAIN="$domain"
+CERT_HOSTNAME="$hostname"
+NOTIFICATION_EMAIL="$email"
+CF_ZONE_ID="$zone_id"
+EOF
+
+    # 设置文件权限
+    chmod 600 /etc/cloudflare/env
+    print_info "成功创建环境变量文件: /etc/cloudflare/env"
+    print_info "已设置文件权限为 600（仅 root 用户可读写）"
+fi
 
 # 检查是否为 root 用户
 if [ "$EUID" -ne 0 ]; then
@@ -127,90 +210,6 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 print_info "成功创建目录: /etc/cert"
-
-# 收集用户输入
-print_title "收集必要信息"
-
-# 获取 Cloudflare Origin CA Key
-echo "请输入您的 Cloudflare Origin CA Key:"
-echo "（可以在 Cloudflare 控制面板 > SSL/TLS > Origin Server > Create Certificate 页面底部找到）"
-read -p "Origin CA Key: " origin_ca_key
-while [ -z "$origin_ca_key" ]; do
-    print_error "Origin CA Key 不能为空！"
-    read -p "Origin CA Key: " origin_ca_key
-done
-
-# 获取域名
-echo ""
-echo "请输入您的域名（例如: example.com）:"
-read -p "域名: " domain
-while [ -z "$domain" ]; do
-    print_error "域名不能为空！"
-    read -p "域名: " domain
-done
-
-# 获取主机名
-echo ""
-echo "请输入您的主机名（可输入多个，空格分隔，例如: www.example.com api.example.com）:"
-read -p "主机名: " hostname
-while [ -z "$hostname" ]; do
-    print_error "主机名不能为空！"
-    read -p "主机名: " hostname
-done
-
-# 获取通知邮箱（可选）
-echo ""
-echo "请输入通知邮箱（可选，用于接收证书更新通知）:"
-read -p "通知邮箱: " email
-
-# 获取 Cloudflare 邮箱和 Global API Key
-echo ""
-echo "请输入您的 Cloudflare 账号邮箱（用于 API 获取 zoneID）:"
-read -p "Cloudflare 邮箱: " cf_email
-while [ -z "$cf_email" ]; do
-    print_error "Cloudflare 邮箱不能为空！"
-    read -p "Cloudflare 邮箱: " cf_email
-done
-
-echo ""
-echo "请输入您的 Cloudflare Global API Key（用于 API 获取 zoneID）:"
-read -s -p "Global API Key: " cf_api_key
-echo
-while [ -z "$cf_api_key" ]; do
-    print_error "Global API Key 不能为空！"
-    read -s -p "Global API Key: " cf_api_key
-    echo
-done
-
-# 通过 API 获取 zoneID
-echo "正在通过 Cloudflare API 获取 zoneID..."
-zone_id=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$domain" \
-    -H "X-Auth-Email: $cf_email" \
-    -H "X-Auth-Key: $cf_api_key" \
-    -H "Content-Type: application/json" | \
-    grep -o '"id":"[a-zA-Z0-9]\{32\}"' | head -n1 | cut -d'"' -f4)
-
-if [ -z "$zone_id" ]; then
-    print_error "zoneID 获取失败，请检查邮箱、API Key 和域名是否正确！"
-    exit 1
-else
-    print_info "成功获取 zoneID: $zone_id"
-fi
-
-# 创建环境变量文件
-print_title "创建环境变量文件"
-cat > /etc/cloudflare/env << EOF
-CLOUDFLARE_ORIGIN_CA_KEY="$origin_ca_key"
-CERT_DOMAIN="$domain"
-CERT_HOSTNAME="$hostname"
-NOTIFICATION_EMAIL="$email"
-CF_ZONE_ID="$zone_id"
-EOF
-
-# 设置文件权限
-chmod 600 /etc/cloudflare/env
-print_info "成功创建环境变量文件: /etc/cloudflare/env"
-print_info "已设置文件权限为 600（仅 root 用户可读写）"
 
 # 询问是否设置计划任务
 print_title "设置计划任务"
