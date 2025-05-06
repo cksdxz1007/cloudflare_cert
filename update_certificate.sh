@@ -7,7 +7,7 @@ LOG_FILE="/var/log/cert_update.log"
 echo "$(date): 开始更新证书..." >> $LOG_FILE
 
 # 设置工作目录
-cd /root/python_script
+cd "$HOME/cloudflare_cert"
 
 # 检查 Python 命令
 if command -v python &> /dev/null; then
