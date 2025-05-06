@@ -12,9 +12,10 @@ from datetime import datetime
 import re
 
 class CloudflareAPI:
-    def __init__(self, origin_ca_key, domain):
+    def __init__(self, origin_ca_key, domain, zone_id=None):
         self.origin_ca_key = origin_ca_key
         self.domain = domain
+        self.zone_id = zone_id
         self.base_url = "https://api.cloudflare.com/client/v4"
         
         # 设置 Origin CA Key 的请求头
@@ -25,9 +26,12 @@ class CloudflareAPI:
     
     def get_zone_id(self):
         """获取域名的 Zone ID"""
-        # 对于 Origin CA 证书操作，我们可以使用硬编码的 Zone ID
-        print("使用默认 Zone ID: 5bd65037fe30d9320f9397a34609d297")
-        return "5bd65037fe30d9320f9397a34609d297"
+        if self.zone_id:
+            print(f"使用 zoneID: {self.zone_id}")
+            return self.zone_id
+        else:
+            print("未提供 zoneID，请检查参数或环境变量 CF_ZONE_ID")
+            return None
     
     def generate_csr(self, hostnames):
         """生成 CSR (证书签名请求)"""
@@ -221,18 +225,21 @@ def main():
     parser.add_argument("--validity", type=int, default=90, help="证书有效期 (天数)")
     parser.add_argument("--type", choices=["origin-rsa", "origin-ecc"], default="origin-rsa", help="证书类型")
     parser.add_argument("--cert_dir", default="/etc/cert", help="证书保存目录")
+    parser.add_argument("--zone_id", help="Cloudflare Zone ID，可选，优先于环境变量 CF_ZONE_ID")
     
     args = parser.parse_args()
     
     # 从环境变量中获取 Origin CA Key
     origin_ca_key = args.origin_ca_key or os.environ.get("CLOUDFLARE_ORIGIN_CA_KEY")
+    # 获取 zone_id，优先参数，否则环境变量
+    zone_id = args.zone_id or os.environ.get("CF_ZONE_ID")
     
     # 检查是否提供了 Origin CA Key
     if not origin_ca_key:
         print("错误: 必须提供 --origin-ca-key 参数或设置 CLOUDFLARE_ORIGIN_CA_KEY 环境变量")
         sys.exit(1)
     
-    cf = CloudflareAPI(origin_ca_key, args.domain)
+    cf = CloudflareAPI(origin_ca_key, args.domain, zone_id)
     
     print(f"为主机名 {', '.join(args.hostnames)} 创建新的 {args.type} 证书...")
     cert = cf.create_origin_certificate(args.hostnames, args.validity, args.type)
