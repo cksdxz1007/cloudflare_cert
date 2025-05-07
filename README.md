@@ -82,7 +82,7 @@ sudo bash -c 'echo "0 3 1 */3 * root /path/to/update_certificate.sh" >> /etc/cro
 ### Python 脚本参数
 
 - `--domain`: 要管理证书的域名（必需）
-- `--hostnames`: 证书包含的主机名列表（必需，支持多个主机名，空格分隔）
+- `--hostnames`: 证书包含的主机名列表（必需，支持多个主机名，空格分隔）。当为单个证书提供多个主机名时，列表中的第一个主机名将用于在 `--cert_dir` 指定的基础目录下命名证书子目录。
 - `--validity`: 证书有效期（天数），默认为 90 天
 - `--type`: 证书类型，可选值：`origin-rsa`（默认）、`origin-ecc`
 - `--cert_dir`: 证书保存的基础目录，默认为 `/etc/cert/`。实际证书将保存在此基础目录下的主机名子目录中 (例如 `/etc/cert/your_hostname/`)。
