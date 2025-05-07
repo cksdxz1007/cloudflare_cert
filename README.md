@@ -55,7 +55,7 @@ CLOUDFLARE_ORIGIN_CA_KEY="your-origin-ca-key"
 CERT_DOMAIN="example.com"
 CERT_HOSTNAME="www.example.com api.example.com"  # 支持多个主机名，空格分隔
 NOTIFICATION_EMAIL="your-email@example.com"  # 可选
-CF_ZONE_ID="your-zone-id"  # 由脚本自动获取
+CF_ZONE_ID="your-zone-id"  # 可选，自动获取或手动填写
 ```
 
 ### 手动创建证书
@@ -88,6 +88,15 @@ sudo bash -c 'echo "0 3 1 */3 * root /path/to/update_certificate.sh" >> /etc/cro
 - `--cert_dir`: 证书保存目录，默认为 `/etc/cert/`
 - `--origin-ca-key`: Cloudflare Origin CA Key（如果未设置，将从环境变量中读取）
 - `--zone_id`: Cloudflare Zone ID（可选，优先于环境变量 CF_ZONE_ID，通常由脚本自动获取）
+
+## 获取 API Token（可选，用于自动获取 Zone ID）
+
+1. 登录 Cloudflare 控制面板
+2. 进入「我的个人资料」>「API 令牌」>「创建令牌」
+3. 选择「创建自定义令牌」
+4. 设置权限：Zone > Zone > Read
+5. 设置 Zone Resources: Include > Specific zone > 选择你的域名
+6. 点击「继续」查看摘要，然后「创建令牌」
 
 ## 获取 Cloudflare Origin CA Key
 

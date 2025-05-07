@@ -136,38 +136,39 @@ else
     echo "请输入通知邮箱（可选，用于接收证书更新通知）:"
     read -p "通知邮箱: " email
 
-    # 获取 Cloudflare 邮箱和 Global API Key
+    # 询问是否需要自动获取 Zone ID
     echo ""
-    echo "请输入您的 Cloudflare 账号邮箱（用于 API 获取 zoneID）:"
-    read -p "Cloudflare 邮箱: " cf_email
-    while [ -z "$cf_email" ]; do
-        print_error "Cloudflare 邮箱不能为空！"
-        read -p "Cloudflare 邮箱: " cf_email
-    done
-
-    echo ""
-    echo "请输入您的 Cloudflare Global API Key（用于 API 获取 zoneID）:"
-    read -s -p "Global API Key: " cf_api_key
-    echo
-    while [ -z "$cf_api_key" ]; do
-        print_error "Global API Key 不能为空！"
-        read -s -p "Global API Key: " cf_api_key
+    echo "是否需要自动获取 Zone ID？（Cloudflare Origin CA 证书创建实际可能不需要此项）"
+    read -p "自动获取 Zone ID？(y/n): " get_zone_id
+    
+    zone_id=""
+    if [[ "$get_zone_id" =~ ^[Yy]$ ]]; then
+        echo ""
+        echo "请在 Cloudflare 控制面板创建一个只有「Zone:Zone:Read」权限的 API Token"
+        echo "1. 登录 Cloudflare 控制面板"
+        echo "2. 进入「我的个人资料」>「API 令牌」>「创建令牌」"
+        echo "3. 选择「创建自定义令牌」，设置只读权限后创建"
+        read -s -p "输入 API Token: " cf_api_token
         echo
-    done
-
-    # 通过 API 获取 zoneID
-    echo "正在通过 Cloudflare API 获取 zoneID..."
-    zone_id=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$domain" \
-        -H "X-Auth-Email: $cf_email" \
-        -H "X-Auth-Key: $cf_api_key" \
-        -H "Content-Type: application/json" | \
-        grep -o '"id":"[a-zA-Z0-9]\{32\}"' | head -n1 | cut -d'"' -f4)
-
-    if [ -z "$zone_id" ]; then
-        print_error "zoneID 获取失败，请检查邮箱、API Key 和域名是否正确！"
-        exit 1
-    else
-        print_info "成功获取 zoneID: $zone_id"
+        while [ -z "$cf_api_token" ]; do
+            print_error "API Token 不能为空！"
+            read -s -p "输入 API Token: " cf_api_token
+            echo
+        done
+        
+        # 通过 API Token 获取 zoneID
+        echo "正在通过 Cloudflare API 获取 zoneID..."
+        zone_id=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$domain" \
+            -H "Authorization: Bearer $cf_api_token" \
+            -H "Content-Type: application/json" | \
+            grep -o '"id":"[a-zA-Z0-9]\{32\}"' | head -n1 | cut -d'"' -f4)
+        
+        if [ -z "$zone_id" ]; then
+            print_error "zoneID 获取失败，请检查 API Token 和域名是否正确！"
+            print_warning "将继续而不设置 zoneID，多数情况下不影响证书创建。"
+        else
+            print_info "成功获取 zoneID: $zone_id"
+        fi
     fi
 
     # 创建环境变量文件
