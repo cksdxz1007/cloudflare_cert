@@ -204,13 +204,13 @@ fi
 print_info "成功创建目录: /etc/cloudflare"
 
 # 创建证书目录
-print_title "创建证书目录"
+print_title "创建证书基础目录"
 mkdir -p /etc/cert
 if [ $? -ne 0 ]; then
-    print_error "创建目录 /etc/cert 失败！"
+    print_error "创建基础目录 /etc/cert 失败！"
     exit 1
 fi
-print_info "成功创建目录: /etc/cert"
+print_info "成功创建基础证书目录: /etc/cert (实际证书将保存在 主机名 子目录下)"
 
 # 询问是否设置计划任务
 print_title "设置计划任务"
@@ -252,7 +252,7 @@ if [[ "$create_cert" =~ ^[Yy]$ ]]; then
       --cert_dir /etc/cert/
     
     if [ $? -eq 0 ]; then
-        print_info "证书创建成功！文件已保存到 /etc/cert/ 目录。"
+        print_info "证书创建成功！文件已保存到 /etc/cert/HOSTNAME/ 目录结构下 (HOSTNAME 为您的主机名)。"
     else
         print_error "证书创建失败！请检查日志文件: /var/log/cert_update.log"
     fi
@@ -267,7 +267,7 @@ print_title "设置完成"
 echo "Cloudflare 证书管理系统设置已完成！"
 echo ""
 echo "环境变量文件: /etc/cloudflare/env"
-echo "证书目录: /etc/cert/"
+echo "证书基础目录: /etc/cert/ (实际证书将保存在对应主机名的子目录下，例如 /etc/cert/your_hostname/)"
 echo "日志文件: /var/log/cert_update.log"
 echo ""
 echo "如需手动更新证书，请运行:"

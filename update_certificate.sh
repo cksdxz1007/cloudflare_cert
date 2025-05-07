@@ -55,7 +55,7 @@ fi
 # 检查通知邮箱环境变量（可选）
 NOTIFICATION_EMAIL=${NOTIFICATION_EMAIL:-""}
 
-# 确保证书目录存在
+# 确保证书基础目录存在 (实际证书将保存在 主机名 子目录下)
 mkdir -p /etc/cert/
 
 # 增加调试信息

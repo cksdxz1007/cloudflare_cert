@@ -7,7 +7,7 @@
 - 创建新的 Origin CA 证书
 - 自动更新证书（通过计划任务）
 - 使用环境变量存储敏感信息
-- 将证书保存到指定目录
+- 将证书按主机名保存在指定的基础目录下 (例如 /etc/cert/your_hostname/)
 - 交互式设置向导（适合新用户）
 
 ## 安装依赖
@@ -65,7 +65,7 @@ CF_ZONE_ID="your-zone-id"  # 可选，自动获取或手动填写
 source /etc/cloudflare/env && ./update_certificate.sh
 
 # 或者直接指定参数
-python cloudflare_cert_token.py --domain example.com --hostnames www.example.com --cert_dir /etc/cert/
+python cloudflare_cert_token.py --domain example.com --hostnames www.example.com --cert_dir /etc/cert/ # /etc/cert/ 是基础目录
 ```
 
 ### 自动更新证书
@@ -85,7 +85,7 @@ sudo bash -c 'echo "0 3 1 */3 * root /path/to/update_certificate.sh" >> /etc/cro
 - `--hostnames`: 证书包含的主机名列表（必需，支持多个主机名，空格分隔）
 - `--validity`: 证书有效期（天数），默认为 90 天
 - `--type`: 证书类型，可选值：`origin-rsa`（默认）、`origin-ecc`
-- `--cert_dir`: 证书保存目录，默认为 `/etc/cert/`
+- `--cert_dir`: 证书保存的基础目录，默认为 `/etc/cert/`。实际证书将保存在此基础目录下的主机名子目录中 (例如 `/etc/cert/your_hostname/`)。
 - `--origin-ca-key`: Cloudflare Origin CA Key（如果未设置，将从环境变量中读取）
 - `--zone_id`: Cloudflare Zone ID（可选，优先于环境变量 CF_ZONE_ID，通常由脚本自动获取）
 
@@ -114,11 +114,11 @@ sudo bash -c 'echo "0 3 1 */3 * root /path/to/update_certificate.sh" >> /etc/cro
 
 ## 证书文件
 
-证书文件将保存在指定的目录中（默认为 `/etc/cert/`）：
+证书文件将保存在指定的证书基础目录下的主机名子目录中（默认为 `/etc/cert/your_hostname/`）：
 
-- 证书文件：`/etc/cert/hostname.crt`
-- 私钥文件：`/etc/cert/hostname.key`
-- 指纹文件：`/etc/cert/hostname.fingerprint`
+- 证书文件：`/etc/cert/your_hostname/your_hostname.crt`
+- 私钥文件：`/etc/cert/your_hostname/your_hostname.key`
+- 指纹文件：`/etc/cert/your_hostname/your_hostname.fingerprint`
 
 ## 日志文件
 
@@ -139,7 +139,7 @@ sudo ./setup_certificate.sh
 source /etc/cloudflare/env && ./update_certificate.sh
 
 # 直接指定参数
-python cloudflare_cert_token.py --domain example.com --hostnames www.example.com --cert_dir /etc/cert/
+python cloudflare_cert_token.py --domain example.com --hostnames www.example.com --cert_dir /etc/cert/ # /etc/cert/ 是基础目录
 ```
 
 ### 查看日志
@@ -164,7 +164,8 @@ sudo cat /var/log/cert_update.log
 
 3. 证书目录是否存在并有正确的权限：
    ```bash
-   sudo ls -la /etc/cert/
+   sudo ls -la /etc/cert/ # 检查基础目录
+   sudo ls -la /etc/cert/your_hostname/ # 检查特定主机名的子目录
    ```
 
 4. 如果遇到 SSL 证书验证错误，可以尝试以下方法：

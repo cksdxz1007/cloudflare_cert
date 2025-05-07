@@ -137,25 +137,29 @@ class CloudflareAPI:
         finally:
             os.unlink(temp_file_path)
     
-    def save_to_cert_dir(self, hostname, cert_content, key_content, fingerprint, cert_dir="/etc/cert"):
-        """将证书和密钥保存到指定目录"""
+    def save_to_cert_dir(self, hostname, cert_content, key_content, fingerprint, cert_dir_base="/etc/cert"):
+        """将证书和密钥保存到指定目录 (基础目录/主机名/)"""
+        # 构建特定于主机名的目录路径
+        host_specific_dir = os.path.join(cert_dir_base, hostname)
+
         # 如果目录不存在，则创建
-        if not os.path.exists(cert_dir):
+        if not os.path.exists(host_specific_dir):
             try:
-                os.makedirs(cert_dir, exist_ok=True)
-                print(f"创建目录: {cert_dir}")
+                os.makedirs(host_specific_dir, exist_ok=True)
+                print(f"创建目录: {host_specific_dir}")
             except PermissionError:
-                print(f"无权限创建目录: {cert_dir}")
+                print(f"无权限创建目录: {host_specific_dir}")
                 print("尝试使用 sudo 创建目录...")
                 try:
-                    subprocess.run(["sudo", "mkdir", "-p", cert_dir], check=True)
-                    print(f"成功创建目录: {cert_dir}")
+                    # 同时创建父目录 /etc/cert (如果它也不存在)
+                    subprocess.run(["sudo", "mkdir", "-p", host_specific_dir], check=True)
+                    print(f"成功创建目录: {host_specific_dir}")
                 except subprocess.CalledProcessError:
-                    print(f"无法创建目录: {cert_dir}")
+                    print(f"无法创建目录: {host_specific_dir}")
                     return False
         
         # 保存证书
-        cert_path = os.path.join(cert_dir, f"{hostname}.crt")
+        cert_path = os.path.join(host_specific_dir, f"{hostname}.crt")
         try:
             with open(cert_path, "w") as f:
                 f.write(cert_content)
@@ -174,7 +178,7 @@ class CloudflareAPI:
                 return False
         
         # 保存密钥
-        key_path = os.path.join(cert_dir, f"{hostname}.key")
+        key_path = os.path.join(host_specific_dir, f"{hostname}.key")
         try:
             with open(key_path, "w") as f:
                 f.write(key_content)
@@ -193,7 +197,7 @@ class CloudflareAPI:
                 return False
         
         # 保存指纹，确保没有额外字符
-        fingerprint_path = os.path.join(cert_dir, f"{hostname}.fingerprint")
+        fingerprint_path = os.path.join(host_specific_dir, f"{hostname}.fingerprint")
         try:
             with open(fingerprint_path, "w") as f:
                 f.write(fingerprint)  # 已经在 get_certificate_fingerprint 中清理过了
@@ -224,7 +228,7 @@ def main():
     parser.add_argument("--hostnames", nargs="+", required=True, help="证书包含的主机名列表")
     parser.add_argument("--validity", type=int, default=90, help="证书有效期 (天数)")
     parser.add_argument("--type", choices=["origin-rsa", "origin-ecc"], default="origin-rsa", help="证书类型")
-    parser.add_argument("--cert_dir", default="/etc/cert", help="证书保存目录")
+    parser.add_argument("--cert_dir", default="/etc/cert", help="证书保存的基础目录 (实际保存路径为: cert_dir/hostname/)")
     parser.add_argument("--zone_id", help="Cloudflare Zone ID，可选，优先于环境变量 CF_ZONE_ID")
     
     args = parser.parse_args()
@@ -260,7 +264,7 @@ def main():
                 cert.get("certificate", ""),
                 cert.get("private_key", ""),
                 fingerprint,
-                args.cert_dir
+                args.cert_dir  # 这里传递的是基础目录
             )
 
 if __name__ == "__main__":
