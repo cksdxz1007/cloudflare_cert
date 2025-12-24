@@ -1,17 +1,25 @@
 # Python 编译文件
 __pycache__/
 *.py[cod]
+.claude/
+
+# uv 虚拟环境
+.venv/
 
 # 排除测试文件
 test.py
 
 # 排除可能包含敏感信息的文件
 /etc/cloudflare/env
+config.yaml
 *.env
 *.key
 *.pem
 *.crt
 *.fingerprint
+
+# 排除证书存储目录
+/etc/cert/
 
 # 日志文件
 *.log

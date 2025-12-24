@@ -5,6 +5,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # 无颜色
 
 # 打印带颜色的标题
@@ -27,6 +28,11 @@ print_error() {
     echo -e "${RED}$1${NC}"
 }
 
+# 打印带颜色的选项
+print_option() {
+    echo -e "${CYAN}$1${NC}"
+}
+
 # 显示帮助信息
 show_help() {
     echo "用法: $0 [选项]"
@@ -34,88 +40,139 @@ show_help() {
     echo "选项:"
     echo "  -h, --help     显示此帮助信息并退出"
     echo "  --version      显示版本信息并退出"
+    echo "  --add-domain   添加新域名配置"
+    echo "  --list         列出所有已配置域名"
+    echo "  --remove       删除域名配置"
     echo ""
     echo "描述:"
-    echo "  这个脚本是 Cloudflare 证书管理工具的交互式设置向导。"
-    echo "  它将引导您设置环境变量、创建证书目录、设置计划任务，并可选择立即创建证书。"
+    echo "  Cloudflare 证书管理工具的交互式设置向导。"
+    echo "  支持多域名管理，每个域名单独配置和调度。"
     echo ""
     echo "示例:"
-    echo "  $0             启动交互式设置向导"
-    echo "  $0 --help      显示帮助信息"
+    echo "  $0             启动交互式设置向导（首次配置）"
+    echo "  $0 --add-domain 添加新域名"
+    echo "  $0 --list      列出所有域名"
+    echo "  $0 --remove    删除域名配置"
     echo ""
     exit 0
 }
 
 # 显示版本信息
 show_version() {
-    echo "Cloudflare 证书管理工具 - 交互式设置向导 v1.0"
-    echo "作者: Claude AI"
+    echo "Cloudflare 证书管理工具 v2.0"
+    echo "支持多域名独立配置"
     echo "日期: $(date +%Y-%m-%d)"
     exit 0
 }
 
-# 处理命令行参数
-for arg in "$@"; do
-    case $arg in
-        -h|--help)
-            show_help
-            ;;
-        --version)
-            show_version
-            ;;
-        *)
-            print_error "未知选项: $arg"
-            echo "使用 '$0 --help' 获取更多信息。"
-            exit 1
-            ;;
-    esac
-done
+# 获取脚本所在目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="${SCRIPT_DIR}/config.yaml"
 
-# 检查命令是否存在
-check_command() {
-    if ! command -v $1 &> /dev/null; then
+# 检查 Python
+check_python() {
+    if command -v python &> /dev/null; then
+        PYTHON_CMD="python"
+    elif command -v python3 &> /dev/null; then
+        PYTHON_CMD="python3"
+    else
+        print_error "错误: 未找到 python 或 python3 命令，请先安装。"
+        exit 1
+    fi
+    # 检查 pyyaml
+    if ! $PYTHON_CMD -c "import yaml" 2>/dev/null; then
+        print_error "错误: 未安装 pyyaml 库，请运行: pip install pyyaml"
+        exit 1
+    fi
+    print_info "Python 环境检查通过"
+}
+
+# 检查 OpenSSL
+check_openssl() {
+    if ! command -v openssl &> /dev/null; then
+        print_error "错误: 未找到 openssl 命令，请先安装。"
+        exit 1
+    fi
+    print_info "OpenSSL 检查通过"
+}
+
+# 初始化配置文件
+init_config() {
+    if [ -f "$CONFIG_FILE" ]; then
+        print_info "配置文件已存在: $CONFIG_FILE"
+        return 0
+    fi
+
+    print_title "初始化配置文件"
+    echo "将基于 config.example.yaml 创建配置文件..."
+
+    cp "${SCRIPT_DIR}/config.example.yaml" "$CONFIG_FILE"
+    chmod 600 "$CONFIG_FILE"
+    print_info "已创建配置文件: $CONFIG_FILE"
+}
+
+# 备份配置文件
+backup_config() {
+    if [ -f "$CONFIG_FILE" ]; then
+        backup_file="${CONFIG_FILE}.backup.$(date +%Y%m%d%H%M%S)"
+        cp "$CONFIG_FILE" "$backup_file"
+        print_info "已备份配置文件到: $backup_file"
+    fi
+}
+
+# 读取配置中的默认 Origin CA Key
+get_default_origin_ca_key() {
+    $PYTHON_CMD -c "
+import yaml
+with open('$CONFIG_FILE', 'r') as f:
+    config = yaml.safe_load(f)
+    default = config.get('default', {})
+    key = default.get('origin_ca_key', '')
+    if key and key != 'your-origin-ca-key':
+        print(key)
+"
+}
+
+# 检查配置是否已初始化
+is_config_initialized() {
+    if [ ! -f "$CONFIG_FILE" ]; then
+        return 1
+    fi
+
+    default_key=$($PYTHON_CMD -c "
+import yaml
+with open('$CONFIG_FILE', 'r') as f:
+    config = yaml.safe_load(f)
+    default = config.get('default', {})
+    key = default.get('origin_ca_key', '')
+    print(key)
+" 2>/dev/null)
+
+    if [ -z "$default_key" ] || [ "$default_key" = "your-origin-ca-key" ]; then
         return 1
     fi
     return 0
 }
 
-# 检查 Python
-if check_command python; then
-    PYTHON_CMD="python"
-elif check_command python3; then
-    PYTHON_CMD="python3"
-else
-    print_error "错误: 未找到 python 或 python3 命令，请先安装。"
-    exit 1
-fi
-print_info "找到 Python 命令: $PYTHON_CMD"
+# 添加新域名
+add_domain() {
+    print_title "添加新域名配置"
 
-# 检查 OpenSSL
-if ! check_command openssl; then
-    print_error "错误: 未找到 openssl 命令，请先安装。"
-    exit 1
-fi
-
-# 检查是否已存在环境变量文件
-if [ -f "/etc/cloudflare/env" ]; then
-    print_info "/etc/cloudflare/env 已存在，将直接使用现有配置。"
-    source /etc/cloudflare/env
-else
-    # 收集用户输入
-    print_title "收集必要信息"
+    # 检查配置文件
+    if [ ! -f "$CONFIG_FILE" ]; then
+        print_warning "配置文件不存在，将先初始化..."
+        init_config
+    fi
 
     # 获取 Cloudflare Origin CA Key
+    echo ""
     echo "请输入您的 Cloudflare Origin CA Key:"
     echo "（可以在 Cloudflare 控制面板 > SSL/TLS > Origin Server > Create Certificate 页面底部找到）"
-    read -p "Origin CA Key: " origin_ca_key
-    while [ -z "$origin_ca_key" ]; do
-        print_error "Origin CA Key 不能为空！"
-        read -p "Origin CA Key: " origin_ca_key
-    done
+    read -p "Origin CA Key (直接回车使用全局默认): " origin_ca_key
 
     # 获取域名
     echo ""
-    echo "请输入您的域名（例如: example.com）:"
+    echo "请输入要添加的域名（例如: example.com）:"
     read -p "域名: " domain
     while [ -z "$domain" ]; do
         print_error "域名不能为空！"
@@ -124,7 +181,7 @@ else
 
     # 获取主机名
     echo ""
-    echo "请输入您的主机名（可输入多个，空格分隔，例如: www.example.com api.example.com）:"
+    echo "请输入该域名的主机名（可输入多个，空格分隔，例如: www.example.com api.example.com）:"
     read -p "主机名: " hostname
     while [ -z "$hostname" ]; do
         print_error "主机名不能为空！"
@@ -138,142 +195,305 @@ else
 
     # 询问是否需要自动获取 Zone ID
     echo ""
-    echo "是否需要自动获取 Zone ID？（Cloudflare Origin CA 证书创建实际可能不需要此项）"
+    echo "是否需要自动获取 Zone ID？"
     read -p "自动获取 Zone ID？(y/n): " get_zone_id
-    
+
     zone_id=""
     if [[ "$get_zone_id" =~ ^[Yy]$ ]]; then
         echo ""
         echo "请在 Cloudflare 控制面板创建一个只有「Zone:Zone:Read」权限的 API Token"
-        echo "1. 登录 Cloudflare 控制面板"
-        echo "2. 进入「我的个人资料」>「API 令牌」>「创建令牌」"
-        echo "3. 选择「创建自定义令牌」，设置只读权限后创建"
         read -s -p "输入 API Token: " cf_api_token
         echo
-        while [ -z "$cf_api_token" ]; do
-            print_error "API Token 不能为空！"
-            read -s -p "输入 API Token: " cf_api_token
-            echo
-        done
-        
-        # 通过 API Token 获取 zoneID
-        echo "正在通过 Cloudflare API 获取 zoneID..."
-        zone_id=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$domain" \
-            -H "Authorization: Bearer $cf_api_token" \
-            -H "Content-Type: application/json" | \
-            grep -o '"id":"[a-zA-Z0-9]\{32\}"' | head -n1 | cut -d'"' -f4)
-        
-        if [ -z "$zone_id" ]; then
-            print_error "zoneID 获取失败，请检查 API Token 和域名是否正确！"
-            print_warning "将继续而不设置 zoneID，多数情况下不影响证书创建。"
-        else
-            print_info "成功获取 zoneID: $zone_id"
+
+        if [ -n "$cf_api_token" ]; then
+            echo "正在通过 Cloudflare API 获取 zoneID..."
+            zone_id=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$domain" \
+                -H "Authorization: Bearer $cf_api_token" \
+                -H "Content-Type: application/json" | \
+                grep -o '"id":"[a-zA-Z0-9]\{32\}"' | head -n1 | cut -d'"' -f4)
+
+            if [ -z "$zone_id" ]; then
+                print_error "zoneID 获取失败，请检查 API Token 和域名是否正确！"
+                print_warning "将继续而不设置 zoneID。"
+            else
+                print_info "成功获取 zoneID: $zone_id"
+            fi
         fi
     fi
 
-    # 创建环境变量文件
-    print_title "创建环境变量文件"
-    cat > /etc/cloudflare/env << EOF
-CLOUDFLARE_ORIGIN_CA_KEY="$origin_ca_key"
-CERT_DOMAIN="$domain"
-CERT_HOSTNAME="$hostname"
-NOTIFICATION_EMAIL="$email"
-CF_ZONE_ID="$zone_id"
-EOF
+    # 询问是否设置计划任务
+    echo ""
+    echo "是否为该域名设置自动更新计划任务？"
+    read -p "设置计划任务？(y/n): " setup_cron
 
-    # 设置文件权限
-    chmod 600 /etc/cloudflare/env
-    print_info "成功创建环境变量文件: /etc/cloudflare/env"
-    print_info "已设置文件权限为 600（仅 root 用户可读写）"
-fi
+    # 备份配置
+    backup_config
 
-# 检查是否为 root 用户
-if [ "$EUID" -ne 0 ]; then
-    print_warning "警告: 此脚本需要 root 权限才能创建环境变量文件和证书目录。"
-    echo "请使用 sudo 运行此脚本。"
-    exit 1
-fi
+    # 更新配置文件
+    $PYTHON_CMD << PYEOF
+import yaml
+import sys
 
-# 创建环境变量目录
-print_title "创建环境变量目录"
-mkdir -p /etc/cloudflare
-if [ $? -ne 0 ]; then
-    print_error "创建目录 /etc/cloudflare 失败！"
-    exit 1
-fi
-print_info "成功创建目录: /etc/cloudflare"
+# 读取现有配置
+try:
+    with open('$CONFIG_FILE', 'r') as f:
+        config = yaml.safe_load(f)
+except:
+    config = {'default': {}, 'domains': {}}
 
-# 创建证书目录
-print_title "创建证书基础目录"
-mkdir -p /etc/cert
-if [ $? -ne 0 ]; then
-    print_error "创建基础目录 /etc/cert 失败！"
-    exit 1
-fi
-print_info "成功创建基础证书目录: /etc/cert (实际证书将保存在 主机名 子目录下)"
+# 确保结构存在
+if 'default' not in config:
+    config['default'] = {}
+if 'domains' not in config:
+    config['domains'] = {}
 
-# 询问是否设置计划任务
-print_title "设置计划任务"
-echo "是否设置计划任务，每 90 天自动更新证书？"
-read -p "是否设置计划任务？(y/n): " setup_cron
-if [[ "$setup_cron" =~ ^[Yy]$ ]]; then
-    # 获取脚本路径
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    
-    # 创建 crontab 文件
-    cat > /etc/cron.d/cert_update << EOF
-# 每 90 天更新一次证书（在每月 1 日的凌晨 3:00 执行）
-0 3 1 */3 * root $script_dir/update_certificate.sh
-EOF
-    print_info "成功创建计划任务: /etc/cron.d/cert_update"
-else
-    print_info "跳过计划任务设置"
-fi
+# 更新默认配置
+if not config['default'].get('origin_ca_key') or '$origin_ca_key':
+    config['default']['origin_ca_key'] = '$origin_ca_key' if '$origin_ca_key' else config['default'].get('origin_ca_key', '')
 
-# 询问是否立即创建证书
-print_title "创建证书"
-echo "是否立即创建证书？"
-read -p "是否立即创建证书？(y/n): " create_cert
-if [[ "$create_cert" =~ ^[Yy]$ ]]; then
-    print_info "开始创建证书..."
-    
-    # 获取脚本路径
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    
-    # 确保环境变量已加载
-    source /etc/cloudflare/env
-    
-    # 显式传递所有参数直接调用 Python 脚本，避免环境变量传递问题
-    $PYTHON_CMD $script_dir/cloudflare_cert_token.py \
-      --origin-ca-key "$CLOUDFLARE_ORIGIN_CA_KEY" \
-      --domain "$CERT_DOMAIN" \
-      --hostnames $CERT_HOSTNAME \
-      --zone_id "$CF_ZONE_ID" \
-      --cert_dir /etc/cert/
-    
+# 添加新域名配置
+config['domains']['$domain'] = {
+    'hostnames': '$hostname'.split(),
+}
+
+if '$zone_id':
+    config['domains']['$domain']['zone_id'] = '$zone_id'
+
+if '$email':
+    config['domains']['$domain']['notification_email'] = '$email'
+
+if '$setup_cron' and '$setup_cron'.lower() in ['y', 'yes']:
+    config['domains']['$domain']['enable_cron'] = True
+
+# 写入配置
+with open('$CONFIG_FILE', 'w') as f:
+    yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+
+print("配置已更新")
+PYEOF
+
     if [ $? -eq 0 ]; then
-        print_info "证书创建成功！文件已保存到 /etc/cert/HOSTNAME/ 目录结构下 (HOSTNAME 为您的主机名)。"
+        print_info "域名 $domain 添加成功！"
     else
-        print_error "证书创建失败！请检查日志文件: /var/log/cert_update.log"
+        print_error "域名添加失败！"
+        exit 1
     fi
-else
-    print_info "跳过证书创建"
-    echo "您可以稍后通过以下命令手动创建证书:"
-    echo "  source /etc/cloudflare/env && $script_dir/update_certificate.sh"
-fi
 
-# 完成信息
-print_title "设置完成"
-echo "Cloudflare 证书管理系统设置已完成！"
-echo ""
-echo "环境变量文件: /etc/cloudflare/env"
-echo "证书基础目录: /etc/cert/ (实际证书将保存在对应主机名的子目录下，例如 /etc/cert/your_hostname/)"
-echo "日志文件: /var/log/cert_update.log"
-echo ""
-echo "如需手动更新证书，请运行:"
-echo "  source /etc/cloudflare/env && $script_dir/update_certificate.sh"
-echo ""
-echo "如需查看证书更新日志，请运行:"
-echo "  sudo cat /var/log/cert_update.log"
-echo ""
-print_info "感谢使用 Cloudflare 证书管理工具！" 
+    # 询问是否立即创建证书
+    echo ""
+    echo "是否立即为该域名创建证书？"
+    read -p "立即创建证书？(y/n): " create_cert
+    if [[ "$create_cert" =~ ^[Yy]$ ]]; then
+        print_info "开始创建证书..."
+        $PYTHON_CMD "${SCRIPT_DIR}/cert_manager.py" --config "$CONFIG_FILE" --domain "$domain"
+        if [ $? -eq 0 ]; then
+            print_info "证书创建成功！"
+        else
+            print_error "证书创建失败！请检查日志"
+        fi
+    fi
+
+    print_title "添加完成"
+}
+
+# 列出所有域名
+list_domains() {
+    print_title "已配置域名列表"
+
+    if [ ! -f "$CONFIG_FILE" ]; then
+        print_warning "尚未配置任何域名"
+        return
+    fi
+
+    domains=$($PYTHON_CMD -c "
+import yaml
+with open('$CONFIG_FILE', 'r') as f:
+    config = yaml.safe_load(f)
+    domains = config.get('domains', {})
+    for domain, cfg in domains.items():
+        hostnames = ', '.join(cfg.get('hostnames', []))
+        cron = '是' if cfg.get('enable_cron', True) else '否'
+        print(f'{domain}: {hostnames} (自动更新: {cron})')
+" 2>/dev/null)
+
+    if [ -n "$domains" ]; then
+        echo "$domains"
+    else
+        print_warning "未找到已配置的域名"
+    fi
+}
+
+# 删除域名
+remove_domain() {
+    print_title "删除域名配置"
+
+    if [ ! -f "$CONFIG_FILE" ]; then
+        print_warning "尚未配置任何域名"
+        return
+    fi
+
+    # 获取域名列表
+    domains=$($PYTHON_CMD -c "
+import yaml
+with open('$CONFIG_FILE', 'r') as f:
+    config = yaml.safe_load(f)
+    domains = list(config.get('domains', {}).keys())
+    print(' '.join(domains))
+" 2>/dev/null)
+
+    if [ -z "$domains" ]; then
+        print_warning "未找到已配置的域名"
+        return
+    fi
+
+    echo "已配置的域名: $domains"
+    echo ""
+    read -p "请输入要删除的域名: " domain
+
+    if [ -z "$domain" ]; then
+        print_error "域名不能为空！"
+        return
+    fi
+
+    # 确认删除
+    echo ""
+    echo "警告: 将删除域名 $domain 的配置和证书文件！"
+    read -p "确认删除？(y/n): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        print_info "已取消删除"
+        return
+    fi
+
+    # 备份配置
+    backup_config
+
+    # 删除配置
+    $PYTHON_CMD << PYEOF
+import yaml
+
+with open('$CONFIG_FILE', 'r') as f:
+    config = yaml.safe_load(f)
+
+if 'domains' in config and '$domain' in config['domains']:
+    del config['domains']['$domain']
+
+    with open('$CONFIG_FILE', 'w') as f:
+        yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+
+    print("配置已更新")
+else:
+    print("域名不存在")
+PYEOF
+
+    if [ $? -eq 0 ]; then
+        print_info "域名 $domain 已删除"
+    else
+        print_error "删除失败！"
+    fi
+}
+
+# 首次配置向导
+wizard() {
+    print_title "Cloudflare 证书管理工具设置向导"
+
+    # 检查依赖
+    check_python
+    check_openssl
+
+    # 初始化配置
+    init_config
+
+    # 获取全局 Origin CA Key
+    echo ""
+    print_title "设置全局配置"
+    echo "请输入您的 Cloudflare Origin CA Key:"
+    echo "（此 Key 将作为所有域名的默认值，可单独覆盖）"
+    read -p "Origin CA Key: " origin_ca_key
+    while [ -z "$origin_ca_key" ]; do
+        print_error "Origin CA Key 不能为空！"
+        read -p "Origin CA Key: " origin_ca_key
+    done
+
+    # 设置默认参数
+    echo ""
+    echo "设置默认证书参数（可直接回车使用默认值）:"
+    read -p "证书类型 [origin-rsa]: " cert_type
+    cert_type=${cert_type:-origin-rsa}
+
+    read -p "有效期(天) [90]: " validity
+    validity=${validity:-90}
+
+    read -p "证书基础目录 [/etc/cert]: " cert_dir
+    cert_dir=${cert_dir:-/etc/cert}
+
+    # 创建配置
+    $PYTHON_CMD << PYEOF
+import yaml
+
+config = {
+    'default': {
+        'origin_ca_key': '$origin_ca_key',
+        'cert_type': '$cert_type',
+        'validity_days': int($validity),
+        'base_cert_dir': '$cert_dir',
+        'enable_cron': True,
+        'notification_email': ''
+    },
+    'domains': {}
+}
+
+with open('$CONFIG_FILE', 'w') as f:
+    yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+
+print("配置已创建")
+PYEOF
+
+    print_info "全局配置已保存"
+
+    # 添加第一个域名
+    echo ""
+    echo "现在添加您的第一个域名配置..."
+    echo ""
+    read -p "是否添加域名配置？(y/n): " add_first
+    if [[ "$add_first" =~ ^[Yy]$ ]]; then
+        add_domain
+    fi
+
+    print_title "设置完成"
+    echo "配置文件: $CONFIG_FILE"
+    echo ""
+    echo "常用命令:"
+    echo "  添加域名: $0 --add-domain"
+    echo "  列出域名: $0 --list"
+    echo "  删除域名: $0 --remove"
+    echo "  创建证书: python ${SCRIPT_DIR}/cert_manager.py --config $CONFIG_FILE --domain example.com"
+}
+
+# 处理命令行参数
+case "${1:-}" in
+    -h|--help)
+        show_help
+        ;;
+    --version)
+        show_version
+        ;;
+    --add-domain)
+        check_python
+        add_domain
+        ;;
+    --list)
+        list_domains
+        ;;
+    --remove)
+        check_python
+        remove_domain
+        ;;
+    "")
+        wizard
+        ;;
+    *)
+        print_error "未知选项: $1"
+        echo "使用 '$0 --help' 获取更多信息。"
+        exit 1
+        ;;
+esac

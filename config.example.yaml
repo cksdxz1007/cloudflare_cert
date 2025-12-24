@@ -1,0 +1,60 @@
+# Cloudflare 证书管理配置模板
+# 复制此文件为 config.yaml 并填入真实配置
+#
+# 证书存储结构: {base_cert_dir}/{domain}/{hostname}/{domain.hostname.{crt,key,fingerprint}}
+
+# 全局默认配置
+default:
+  # Cloudflare Origin CA Key (必填)
+  # 建议在 Cloudflare 控制面板 > SSL/TLS > Origin Server 查看
+  origin_ca_key: "your-origin-ca-key"
+
+  # 默认证书类型: origin-rsa 或 origin-ecc
+  cert_type: "origin-rsa"
+
+  # 默认证书有效期 (天数)
+  validity_days: 90
+
+  # 证书基础目录
+  base_cert_dir: "/etc/cert"
+
+  # 是否启用自动更新 cron
+  enable_cron: true
+
+  # 默认通知邮箱 (可选)
+  notification_email: ""
+
+# 域名配置 (支持多个域名)
+domains:
+  # 示例域名配置
+  example.com:
+    # Origin CA Key (可选，null 表示使用全局默认)
+    origin_ca_key: null
+
+    # 需要申请证书的主机名列表
+    hostnames:
+      - www.example.com
+      - api.example.com
+
+    # Zone ID (可选，通常由脚本自动获取)
+    zone_id: ""
+
+    # 证书类型 (可选，覆盖全局默认)
+    cert_type: null
+
+    # 有效期天数 (可选，覆盖全局默认)
+    validity_days: null
+
+    # 是否启用自动更新 (可选，覆盖全局默认)
+    enable_cron: null
+
+    # 通知邮箱 (可选，覆盖全局默认)
+    notification_email: ""
+
+  # 另一个域名示例
+  # another.com:
+  #   origin_ca_key: null
+  #   hostnames:
+  #     - www.another.com
+  #   zone_id: ""
+  #   enable_cron: true
