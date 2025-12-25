@@ -174,8 +174,8 @@ configure_smtp() {
         read -p "SMTP 服务器地址: " smtp_host
     done
 
-    read -p "SMTP 端口 (465 或 587): " smtp_port
-    smtp_port=${smtp_port:-465}
+    read -p "SMTP 端口 (465 或 587) [587]: " smtp_port
+    smtp_port=${smtp_port:-587}
 
     read -p "发件人邮箱 / 用户名: " smtp_sender
     while [ -z "$smtp_sender" ]; do
