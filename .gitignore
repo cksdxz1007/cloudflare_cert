@@ -1,13 +1,17 @@
 # Python 编译文件
 __pycache__/
 *.py[cod]
+# 排除 Claude AI 相关文件夹
 .claude/
+# VSCode 配置文件
+.vscode/
 
 # uv 虚拟环境
 .venv/
 
 # 排除测试文件
 test.py
+
 
 # 排除可能包含敏感信息的文件
 /etc/cloudflare/env
