@@ -151,6 +151,67 @@ parse_old_config() {
     echo "$CERT_DOMAIN" "$CERT_HOSTNAME" "$CLOUDFLARE_ORIGIN_CA_KEY" "$CF_ZONE_ID" "$NOTIFICATION_EMAIL"
 }
 
+# 交互式配置 SMTP
+configure_smtp() {
+    print_title "配置邮件通知 (可选)"
+
+    echo "是否配置 SMTP 邮件服务器用于发送证书更新通知？"
+    read -p "配置 SMTP？(y/n): " configure_smtp
+
+    if [[ ! "$configure_smtp" =~ ^[Yy]$ ]]; then
+        print_info "跳过 SMTP 配置"
+        echo ""
+        return 1
+    fi
+
+    # 获取 SMTP 配置
+    echo ""
+    echo "请输入 SMTP 服务器信息:"
+
+    read -p "SMTP 服务器地址 (如 smtp.gmail.com): " smtp_host
+    while [ -z "$smtp_host" ]; do
+        print_error "SMTP 服务器地址不能为空！"
+        read -p "SMTP 服务器地址: " smtp_host
+    done
+
+    read -p "SMTP 端口 (465 或 587): " smtp_port
+    smtp_port=${smtp_port:-465}
+
+    read -p "发件人邮箱: " smtp_sender
+    while [ -z "$smtp_sender" ]; do
+        print_error "发件人邮箱不能为空！"
+        read -p "发件人邮箱: " smtp_sender
+    done
+
+    read -p "用户名 (通常是邮箱地址): " smtp_username
+    while [ -z "$smtp_username" ]; do
+        print_error "用户名不能为空！"
+        read -p "用户名: " smtp_username
+    done
+
+    read -s -p "密码或 App Password: " smtp_password
+    echo ""
+
+    echo ""
+    echo "请选择加密方式:"
+    echo "  1. SSL (465 端口)"
+    echo "  2. STARTTLS (587 端口)"
+    read -p "选择 (1/2) [1]: " smtp_ssl_choice
+    smtp_ssl_choice=${smtp_ssl_choice:-1}
+
+    if [ "$smtp_ssl_choice" = "1" ]; then
+        smtp_use_ssl="true"
+    else
+        smtp_use_ssl="false"
+    fi
+
+    print_info "SMTP 配置完成"
+    echo ""
+
+    # 返回 SMTP 配置
+    echo "${smtp_host}:${smtp_port}:${smtp_sender}:${smtp_username}:${smtp_password}:${smtp_use_ssl}"
+}
+
 # 显示新配置内容（不创建文件）
 preview_new_config() {
     local domain="$1"
@@ -158,6 +219,7 @@ preview_new_config() {
     local origin_ca_key="$3"
     local zone_id="$4"
     local email="$5"
+    local smtp_config="$6"
 
     print_title "预览新配置文件内容"
 
@@ -170,6 +232,31 @@ preview_new_config() {
         hostnames_array="${hostnames_array}      - ${h}
 "
     done
+
+    # 生成 SMTP 配置部分
+    if [ -n "$smtp_config" ] && [ "$smtp_config" != "skip" ]; then
+        IFS=':' read -r smtp_host smtp_port smtp_sender smtp_username smtp_password smtp_use_ssl <<< "$smtp_config"
+        smtp_section="  # SMTP 邮件服务器配置
+  smtp:
+    host: \"${smtp_host}\"
+    port: ${smtp_port}
+    sender: \"${smtp_sender}\"
+    username: \"${smtp_username}\"
+    password: \"${smtp_password}\"
+    use_ssl: ${smtp_use_ssl}
+"
+    else
+        smtp_section="  # SMTP 邮件服务器配置 (可选)
+  # 如需启用邮件通知，请配置以下信息
+  # smtp:
+  #   host: \"smtp.example.com\"
+  #   port: 465
+  #   sender: \"your-email@example.com\"
+  #   username: \"your-email@example.com\"
+  #   password: \"your-password\"
+  #   use_ssl: true
+"
+    fi
 
     # 输出配置内容
     cat << EOF
@@ -184,17 +271,7 @@ default:
   base_cert_dir: "/etc/cert"
   enable_cron: true
   notification_email: "${email}"
-
-  # SMTP 邮件服务器配置 (可选)
-  smtp:
-    host: "smtp.example.com"
-    port: 465
-    sender: "cert-notify@example.com"
-    username: "cert-notify@example.com"
-    password: "your-app-password"
-    use_ssl: true
-
-domains:
+${smtp_section}domains:
   ${domain}:
     origin_ca_key: null
     hostnames:
@@ -211,9 +288,10 @@ create_new_config() {
     local origin_ca_key="$3"
     local zone_id="$4"
     local email="$5"
+    local smtp_config="$6"
 
     if [ "$DRY_RUN" = true ]; then
-        preview_new_config "$domain" "$hostnames" "$origin_ca_key" "$zone_id" "$email"
+        preview_new_config "$domain" "$hostnames" "$origin_ca_key" "$zone_id" "$email" "$smtp_config"
         return
     fi
 
@@ -237,6 +315,31 @@ create_new_config() {
 "
     done
 
+    # 生成 SMTP 配置部分
+    if [ -n "$smtp_config" ] && [ "$smtp_config" != "skip" ]; then
+        IFS=':' read -r smtp_host smtp_port smtp_sender smtp_username smtp_password smtp_use_ssl <<< "$smtp_config"
+        smtp_section="  # SMTP 邮件服务器配置
+  smtp:
+    host: \"${smtp_host}\"
+    port: ${smtp_port}
+    sender: \"${smtp_sender}\"
+    username: \"${smtp_username}\"
+    password: \"${smtp_password}\"
+    use_ssl: ${smtp_use_ssl}
+"
+    else
+        smtp_section="  # SMTP 邮件服务器配置 (可选)
+  # 如需启用邮件通知，请配置以下信息
+  # smtp:
+  #   host: \"smtp.example.com\"
+  #   port: 465
+  #   sender: \"your-email@example.com\"
+  #   username: \"your-email@example.com\"
+  #   password: \"your-password\"
+  #   use_ssl: true
+"
+    fi
+
     # 创建新配置
     cat > "$NEW_CONFIG_FILE" << EOF
 # Cloudflare 证书管理配置
@@ -250,17 +353,7 @@ default:
   base_cert_dir: "/etc/cert"
   enable_cron: true
   notification_email: "${email}"
-
-  # SMTP 邮件服务器配置 (可选)
-  smtp:
-    host: "smtp.example.com"
-    port: 465
-    sender: "cert-notify@example.com"
-    username: "cert-notify@example.com"
-    password: "your-app-password"
-    use_ssl: true
-
-domains:
+${smtp_section}domains:
   ${domain}:
     origin_ca_key: null
     hostnames:
@@ -584,8 +677,16 @@ main() {
     # 备份旧配置
     backup_old_config
 
+    # 配置 SMTP (可选)
+    smtp_config=""
+    if [ "$DRY_RUN" = true ]; then
+        print_dry_run "交互式 SMTP 配置"
+    else
+        smtp_config=$(configure_smtp)
+    fi
+
     # 创建新配置
-    create_new_config "$domain" "$hostnames" "$origin_ca_key" "$zone_id" "$email"
+    create_new_config "$domain" "$hostnames" "$origin_ca_key" "$zone_id" "$email" "$smtp_config"
 
     # 迁移证书目录（可选）
     migrate_cert_dir
