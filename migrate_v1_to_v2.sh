@@ -118,10 +118,8 @@ backup_old_config() {
 
 # 从旧配置读取域名信息
 parse_old_config() {
-    print_title "解析旧版配置"
-
     if [ ! -f "$OLD_ENV_FILE" ]; then
-        print_error "旧配置文件不存在: $OLD_ENV_FILE"
+        echo "错误: 旧配置文件不存在: $OLD_ENV_FILE" >&2
         return 1
     fi
 
@@ -129,25 +127,21 @@ parse_old_config() {
     source "$OLD_ENV_FILE"
 
     if [ -z "$CLOUDFLARE_ORIGIN_CA_KEY" ]; then
-        print_error "未找到 CLOUDFLARE_ORIGIN_CA_KEY"
+        echo "错误: 未找到 CLOUDFLARE_ORIGIN_CA_KEY" >&2
         return 1
     fi
 
     if [ -z "$CERT_DOMAIN" ]; then
-        print_error "未找到 CERT_DOMAIN"
+        echo "错误: 未找到 CERT_DOMAIN" >&2
         return 1
     fi
 
     if [ -z "$CERT_HOSTNAME" ]; then
-        print_error "未找到 CERT_HOSTNAME"
+        echo "错误: 未找到 CERT_HOSTNAME" >&2
         return 1
     fi
 
-    print_info "旧配置解析成功"
-    print_info "  域名: $CERT_DOMAIN"
-    print_info "  主机名: $CERT_HOSTNAME"
-
-    # 返回解析的变量
+    # 只返回解析的变量（通过 stdout）
     echo "$CERT_DOMAIN" "$CERT_HOSTNAME" "$CLOUDFLARE_ORIGIN_CA_KEY" "$CF_ZONE_ID" "$NOTIFICATION_EMAIL"
 }
 
@@ -668,6 +662,8 @@ main() {
     check_root
     check_prerequisites
 
+    print_title "解析旧版配置"
+
     # 解析旧配置
     read domain hostnames origin_ca_key zone_id email <<< $(parse_old_config)
 
@@ -675,6 +671,10 @@ main() {
         print_error "无法解析旧配置"
         exit 1
     fi
+
+    print_info "旧配置解析成功"
+    print_info "  域名: $domain"
+    print_info "  主机名: $hostnames"
 
     # 备份旧配置
     backup_old_config
