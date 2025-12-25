@@ -156,9 +156,9 @@ configure_smtp() {
     print_title "配置邮件通知 (可选)"
 
     echo "是否配置 SMTP 邮件服务器用于发送证书更新通知？"
-    read -p "配置 SMTP？(y/n): " configure_smtp
+    read -p "配置 SMTP？(y/n): " answer
 
-    if [[ ! "$configure_smtp" =~ ^[Yy]$ ]]; then
+    if [[ ! "$answer" =~ ^[Yy]$ ]]; then
         print_info "跳过 SMTP 配置"
         echo ""
         return 1
@@ -177,16 +177,10 @@ configure_smtp() {
     read -p "SMTP 端口 (465 或 587): " smtp_port
     smtp_port=${smtp_port:-465}
 
-    read -p "发件人邮箱: " smtp_sender
+    read -p "发件人邮箱 / 用户名: " smtp_sender
     while [ -z "$smtp_sender" ]; do
         print_error "发件人邮箱不能为空！"
-        read -p "发件人邮箱: " smtp_sender
-    done
-
-    read -p "用户名 (通常是邮箱地址): " smtp_username
-    while [ -z "$smtp_username" ]; do
-        print_error "用户名不能为空！"
-        read -p "用户名: " smtp_username
+        read -p "发件人邮箱 / 用户名: " smtp_sender
     done
 
     read -s -p "密码或 App Password: " smtp_password
@@ -208,8 +202,8 @@ configure_smtp() {
     print_info "SMTP 配置完成"
     echo ""
 
-    # 返回 SMTP 配置
-    echo "${smtp_host}:${smtp_port}:${smtp_sender}:${smtp_username}:${smtp_password}:${smtp_use_ssl}"
+    # 返回 SMTP 配置 (用户名=sender)
+    echo "${smtp_host}:${smtp_port}:${smtp_sender}:${smtp_sender}:${smtp_password}:${smtp_use_ssl}"
 }
 
 # 显示新配置内容（不创建文件）
@@ -409,6 +403,8 @@ preview_cert_migration() {
 
 # 迁移证书目录结构
 migrate_cert_dir() {
+    local domain="$1"
+
     if [ "$DRY_RUN" = true ]; then
         preview_cert_migration
         return
@@ -418,6 +414,7 @@ migrate_cert_dir() {
 
     echo "旧结构: /etc/cert/{hostname}/"
     echo "新结构: /etc/cert/{domain}/{hostname}/"
+    echo "目标域名: $domain"
     echo ""
     read -p "是否迁移现有证书到新结构？(y/n): " confirm
 
@@ -432,35 +429,44 @@ migrate_cert_dir() {
         return 0
     fi
 
+    # 查找与域名匹配的旧证书目录
+    # 旧结构: /etc/cert/{hostname}/hostname.{crt,key,fingerprint}
+    migrated=false
+
     for hostname_dir in /etc/cert/*/; do
-        if [ -d "$hostname_dir" ]; then
-            hostname=$(basename "$hostname_dir")
-            echo "处理: $hostname"
+        [ -d "$hostname_dir" ] || continue
 
-            # 迁移所有文件类型
-            for ext in crt key fingerprint; do
-                for old_file in "$hostname_dir"*.${ext}; do
-                    [ -f "$old_file" ] || continue
+        hostname=$(basename "$hostname_dir")
+        echo "处理: $hostname"
 
-                    filename=$(basename "$old_file")
-                    # 提取域名部分
-                    domain="${filename%%.*}"
+        # 迁移所有文件类型
+        for ext in crt key fingerprint; do
+            for old_file in "$hostname_dir"*.${ext}; do
+                [ -f "$old_file" ] || continue
 
-                    # 创建新目录结构
-                    new_dir="/etc/cert/${domain}/${hostname}"
-                    mkdir -p "$new_dir"
+                filename=$(basename "$old_file")
 
-                    # 复制文件
-                    new_filename="${domain}.${hostname}.${ext}"
-                    cp "$old_file" "${new_dir}/${new_filename}"
-                    echo "  ${filename} -> ${new_filename}"
-                done
+                # 创建新目录结构: /etc/cert/domain/hostname/
+                new_dir="/etc/cert/${domain}/${hostname}"
+                mkdir -p "$new_dir"
+
+                # 新文件名: domain.hostname.{ext}
+                new_filename="${domain}.${hostname}.${ext}"
+
+                # 复制文件
+                cp "$old_file" "${new_dir}/${new_filename}"
+                echo "  ${filename} -> ${new_filename}"
+                migrated=true
             done
-        fi
+        done
     done
 
-    print_info "证书迁移完成"
-    print_warning "建议在验证新证书正常后删除旧目录"
+    if [ "$migrated" = true ]; then
+        print_info "证书迁移完成"
+        print_warning "建议在验证新证书正常后删除旧目录 /etc/cert/*/"
+    else
+        print_warning "未找到需要迁移的证书文件"
+    fi
 }
 
 # 预览 Cron 迁移
@@ -689,7 +695,7 @@ main() {
     create_new_config "$domain" "$hostnames" "$origin_ca_key" "$zone_id" "$email" "$smtp_config"
 
     # 迁移证书目录（可选）
-    migrate_cert_dir
+    migrate_cert_dir "$domain"
 
     # 迁移 cron
     migrate_cron
