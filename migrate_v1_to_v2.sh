@@ -186,36 +186,20 @@ configure_smtp() {
     read -s -p "密码或 App Password: " smtp_password
     echo ""
 
-    # 等待用户按回车继续
-    read -p "按回车继续... "
-
-    echo ""
-    # 根据端口自动建议加密方式
+    # 根据端口自动设置加密方式
     if [ "$smtp_port" = "465" ]; then
-        default_ssl_choice="1"
-        echo "请选择加密方式:"
-        echo "  1. SSL (465 端口) - 推荐"
-        echo "  2. STARTTLS (587 端口)"
-    else
-        default_ssl_choice="2"
-        echo "请选择加密方式:"
-        echo "  1. SSL (465 端口)"
-        echo "  2. STARTTLS (587 端口) - 推荐"
-    fi
-    read -p "选择 (1/2) [${default_ssl_choice}]: " smtp_ssl_choice
-    smtp_ssl_choice=${smtp_ssl_choice:-$default_ssl_choice}
-
-    if [ "$smtp_ssl_choice" = "1" ]; then
         smtp_use_ssl="true"
+        echo "加密方式: SSL (自动匹配 465 端口)"
     else
         smtp_use_ssl="false"
+        echo "加密方式: STARTTLS (自动匹配 587 端口)"
     fi
 
     print_info "SMTP 配置完成"
     echo ""
 
     # 返回 SMTP 配置 (用户名=sender)
-    echo "${smtp_host}:${smtp_port}:${smtp_sender}:${smtp_sender}:${smtp_password}:${smtp_use_ssl}"
+    echo "${smtp_host}:${smtp_port}:${smtp_sender}:${smtp_password}:${smtp_use_ssl}"
 }
 
 # 显示新配置内容（不创建文件）
@@ -241,13 +225,13 @@ preview_new_config() {
 
     # 生成 SMTP 配置部分
     if [ -n "$smtp_config" ] && [ "$smtp_config" != "skip" ]; then
-        IFS=':' read -r smtp_host smtp_port smtp_sender smtp_username smtp_password smtp_use_ssl <<< "$smtp_config"
+        IFS=':' read -r smtp_host smtp_port smtp_sender smtp_password smtp_use_ssl <<< "$smtp_config"
         smtp_section="  # SMTP 邮件服务器配置
   smtp:
     host: \"${smtp_host}\"
     port: ${smtp_port}
     sender: \"${smtp_sender}\"
-    username: \"${smtp_username}\"
+    username: \"${smtp_sender}\"
     password: \"${smtp_password}\"
     use_ssl: ${smtp_use_ssl}
 "
@@ -323,13 +307,13 @@ create_new_config() {
 
     # 生成 SMTP 配置部分
     if [ -n "$smtp_config" ] && [ "$smtp_config" != "skip" ]; then
-        IFS=':' read -r smtp_host smtp_port smtp_sender smtp_username smtp_password smtp_use_ssl <<< "$smtp_config"
+        IFS=':' read -r smtp_host smtp_port smtp_sender smtp_password smtp_use_ssl <<< "$smtp_config"
         smtp_section="  # SMTP 邮件服务器配置
   smtp:
     host: \"${smtp_host}\"
     port: ${smtp_port}
     sender: \"${smtp_sender}\"
-    username: \"${smtp_username}\"
+    username: \"${smtp_sender}\"
     password: \"${smtp_password}\"
     use_ssl: ${smtp_use_ssl}
 "
