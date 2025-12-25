@@ -13,8 +13,13 @@ import argparse
 import subprocess
 import tempfile
 import re
+import logging
 from datetime import datetime
 from pathlib import Path
+
+# 配置日志
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 try:
     import yaml
@@ -22,6 +27,14 @@ except ImportError:
     print("错误: 需要安装 pyyaml 库")
     print("运行: pip install pyyaml")
     sys.exit(1)
+
+# 导入邮件通知模块
+try:
+    from email_notifier import EmailNotifier, create_email_notifier_from_config
+except ImportError:
+    logger.warning("email_notifier.py 未找到，邮件通知功能不可用")
+    EmailNotifier = None
+    create_email_notifier_from_config = None
 
 
 class ConfigLoader:
@@ -58,7 +71,7 @@ class ConfigLoader:
         merged_config.update(domain_config)
 
         # 处理 null 值，使用默认值
-        for key in ['origin_ca_key', 'cert_type', 'validity_days', 'enable_cron', 'notification_email']:
+        for key in ['origin_ca_key', 'cert_type', 'validity_days', 'enable_cron', 'notification_email', 'base_cert_dir']:
             if merged_config.get(key) is None:
                 merged_config[key] = default_config.get(key)
 
@@ -135,7 +148,12 @@ class CloudflareAPI:
 
     def create_origin_certificate(self, hostnames, validity_days=90, request_type="origin-rsa"):
         """创建新的 Origin CA 证书"""
-        import requests
+        try:
+            import requests
+        except ImportError:
+            print("错误: 需要安装 requests 库")
+            print("运行: pip install requests")
+            return None
 
         url = f"{self.base_url}/certificates"
 
@@ -268,6 +286,7 @@ def main():
     parser.add_argument("--type", choices=["origin-rsa", "origin-ecc"], help="证书类型")
     parser.add_argument("--cert_dir", help="证书保存基础目录")
     parser.add_argument("--zone_id", help="Cloudflare Zone ID")
+    parser.add_argument("--no-email", action="store_true", help="禁用邮件通知")
 
     args = parser.parse_args()
 
@@ -291,6 +310,18 @@ def main():
 
     print(f"配置加载成功，共 {len(domains)} 个域名")
 
+    # 初始化邮件通知器
+    email_notifier = None
+    if not args.no_email and create_email_notifier_from_config:
+        default_config = config.get('default', {})
+        email_notifier = create_email_notifier_from_config(default_config)
+        if email_notifier:
+            print("邮件通知已启用")
+        else:
+            print("邮件通知未配置（跳过）")
+    else:
+        print("邮件通知已禁用")
+
     success_count = 0
     fail_count = 0
 
@@ -308,6 +339,12 @@ def main():
         validity_days = args.validity or domain_config.get('validity_days', 90)
         cert_dir_base = args.cert_dir or domain_config.get('base_cert_dir', '/etc/cert')
         zone_id = args.zone_id or domain_config.get('zone_id')
+        notification_email = domain_config.get('notification_email', '')
+
+        # 获取收件人邮箱列表
+        recipients = []
+        if notification_email:
+            recipients = [e.strip() for e in notification_email.split(',') if e.strip()]
 
         if not origin_ca_key:
             print(f"错误: 域名 {domain} 未配置 origin_ca_key")
@@ -345,7 +382,7 @@ def main():
             if "private_key" in cert and fingerprint:
                 # 为每个主机名保存证书
                 for hostname in hostnames:
-                    cf.save_to_cert_dir(
+                    saved = cf.save_to_cert_dir(
                         domain,
                         hostname,
                         cert.get("certificate", ""),
@@ -353,6 +390,18 @@ def main():
                         fingerprint,
                         cert_dir_base
                     )
+
+                    # 发送邮件通知
+                    if saved and email_notifier and recipients:
+                        cert_info = {
+                            'hostname': hostname,
+                            'cert_path': os.path.join(cert_dir_base, domain, hostname, f"{domain}.{hostname}.crt"),
+                            'key_path': os.path.join(cert_dir_base, domain, hostname, f"{domain}.{hostname}.key"),
+                            'fingerprint': fingerprint,
+                            'expires_at': cert.get('expires_at', 'N/A')
+                        }
+                        email_notifier.send_cert_renewal_notification(domain, cert_info, recipients)
+
             success_count += 1
         else:
             fail_count += 1

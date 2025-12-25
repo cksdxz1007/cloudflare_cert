@@ -247,9 +247,9 @@ if 'default' not in config:
 if 'domains' not in config:
     config['domains'] = {}
 
-# 更新默认配置
-if not config['default'].get('origin_ca_key') or '$origin_ca_key':
-    config['default']['origin_ca_key'] = '$origin_ca_key' if '$origin_ca_key' else config['default'].get('origin_ca_key', '')
+# 更新默认配置（仅当用户提供了新的 key 时）
+if '$origin_ca_key':
+    config['default']['origin_ca_key'] = '$origin_ca_key'
 
 # 添加新域名配置
 config['domains']['$domain'] = {
@@ -357,7 +357,8 @@ with open('$CONFIG_FILE', 'r') as f:
 
     # 确认删除
     echo ""
-    echo "警告: 将删除域名 $domain 的配置和证书文件！"
+    echo "警告: 将删除域名 $domain 的配置！"
+    echo "（注：证书文件不会被删除，如需删除请手动处理）"
     read -p "确认删除？(y/n): " confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         print_info "已取消删除"
@@ -437,7 +438,15 @@ config = {
         'validity_days': int($validity),
         'base_cert_dir': '$cert_dir',
         'enable_cron': True,
-        'notification_email': ''
+        'notification_email': '',
+        'smtp': {
+            'host': 'smtp.example.com',
+            'port': 465,
+            'sender': 'cert-notify@example.com',
+            'username': 'cert-notify@example.com',
+            'password': 'your-app-password',
+            'use_ssl': True
+        }
     },
     'domains': {}
 }

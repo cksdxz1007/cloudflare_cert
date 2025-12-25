@@ -185,6 +185,15 @@ default:
   enable_cron: true
   notification_email: "${email}"
 
+  # SMTP 邮件服务器配置 (可选)
+  smtp:
+    host: "smtp.example.com"
+    port: 465
+    sender: "cert-notify@example.com"
+    username: "cert-notify@example.com"
+    password: "your-app-password"
+    use_ssl: true
+
 domains:
   ${domain}:
     origin_ca_key: null
@@ -241,6 +250,15 @@ default:
   base_cert_dir: "/etc/cert"
   enable_cron: true
   notification_email: "${email}"
+
+  # SMTP 邮件服务器配置 (可选)
+  smtp:
+    host: "smtp.example.com"
+    port: 465
+    sender: "cert-notify@example.com"
+    username: "cert-notify@example.com"
+    password: "your-app-password"
+    use_ssl: true
 
 domains:
   ${domain}:

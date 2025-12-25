@@ -24,6 +24,21 @@ default:
   # 默认通知邮箱 (可选)
   notification_email: ""
 
+  # SMTP 邮件服务器配置 (可选)
+  smtp:
+    # 邮件服务器地址
+    host: "smtp.example.com"
+    # 邮件服务器端口
+    port: 465  # 或 587
+    # 发件人邮箱
+    sender: "cert-notify@example.com"
+    # 发件人用户名 (通常是邮箱地址)
+    username: "cert-notify@example.com"
+    # 发件人密码或 App Password
+    password: "your-app-password"
+    # 是否使用 TLS/SSL (true=465端口SSL, false=587端口STARTTLS)
+    use_ssl: true
+
 # 域名配置 (支持多个域名)
 domains:
   # 示例域名配置
