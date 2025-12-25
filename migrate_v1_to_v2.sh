@@ -186,12 +186,24 @@ configure_smtp() {
     read -s -p "密码或 App Password: " smtp_password
     echo ""
 
+    # 等待用户按回车继续
+    read -p "按回车继续... "
+
     echo ""
-    echo "请选择加密方式:"
-    echo "  1. SSL (465 端口)"
-    echo "  2. STARTTLS (587 端口)"
-    read -p "选择 (1/2) [1]: " smtp_ssl_choice
-    smtp_ssl_choice=${smtp_ssl_choice:-1}
+    # 根据端口自动建议加密方式
+    if [ "$smtp_port" = "465" ]; then
+        default_ssl_choice="1"
+        echo "请选择加密方式:"
+        echo "  1. SSL (465 端口) - 推荐"
+        echo "  2. STARTTLS (587 端口)"
+    else
+        default_ssl_choice="2"
+        echo "请选择加密方式:"
+        echo "  1. SSL (465 端口)"
+        echo "  2. STARTTLS (587 端口) - 推荐"
+    fi
+    read -p "选择 (1/2) [${default_ssl_choice}]: " smtp_ssl_choice
+    smtp_ssl_choice=${smtp_ssl_choice:-$default_ssl_choice}
 
     if [ "$smtp_ssl_choice" = "1" ]; then
         smtp_use_ssl="true"
