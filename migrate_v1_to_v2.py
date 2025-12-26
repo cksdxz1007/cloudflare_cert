@@ -51,6 +51,11 @@ def print_warning(msg):
     print(f"[!] {msg}")
 
 
+def print_info(msg):
+    """打印提示信息"""
+    print(f"[i] {msg}")
+
+
 def print_error(msg):
     """打印错误信息"""
     print(f"[✗] {msg}")
@@ -260,6 +265,17 @@ default:
     print(config_content)
 
 
+def files_are_identical(path1, path2):
+    """比较两个文件内容是否相同"""
+    if not path1.exists() or not path2.exists():
+        return False
+    try:
+        with open(path1, 'rb') as f1, open(path2, 'rb') as f2:
+            return f1.read() == f2.read()
+    except Exception:
+        return False
+
+
 def migrate_cert_dir(old_config):
     """迁移证书目录结构"""
     print_header("迁移证书目录结构")
@@ -277,6 +293,7 @@ def migrate_cert_dir(old_config):
         return
 
     migrated = False
+    skipped = False
 
     # 查找旧结构目录
     for hostname_dir in CERT_BASE_DIR.iterdir():
@@ -298,14 +315,27 @@ def migrate_cert_dir(old_config):
                         if DRY_RUN:
                             print(f"  [预览] {old_file.name} -> {new_filename}")
                         else:
+                            if new_file.exists():
+                                # 检查文件内容是否相同
+                                if files_are_identical(old_file, new_file):
+                                        print(f"  [跳过] {new_filename} (已存在且内容相同)")
+                                        skipped = True
+                                        migrated = True
+                                        continue
+                                    else:
+                                        print(f"  [存在] {new_filename}")
+                                        if not questionary.confirm(f"    覆盖已存在的文件？"):
+                                            print(f"    跳过 {old_file.name}")
+                                            continue
                             shutil.copy(old_file, new_file)
                             print(f"  {old_file.name} -> {new_filename}")
-
-                        migrated = True
+                            migrated = True
 
     if migrated:
         if not DRY_RUN:
             print_success("证书迁移完成")
+        if skipped:
+            print_info("部分文件因已存在且内容相同而跳过")
         print_warning("建议在验证新证书正常后删除旧目录 /etc/cert/*/")
     else:
         print_warning("未找到需要迁移的证书文件")
@@ -347,6 +377,20 @@ def migrate_cron(old_config):
     if DRY_RUN:
         print(f"  [预览] 创建: {cron_file}")
     else:
+        # 检查文件是否已存在且内容相同
+        if cron_file.exists():
+            try:
+                with open(cron_file, 'r') as f:
+                    existing_content = f.read()
+                if existing_content == cron_content:
+                    print_success(f"cron 文件已存在且内容相同，跳过: {cron_file}")
+                    return
+            except Exception:
+                pass
+            print_warning(f"cron 文件已存在: {cron_file}")
+            if not questionary.confirm("是否覆盖？"):
+                print_success("跳过 cron 创建")
+                return
         with open(cron_file, 'w') as f:
             f.write(cron_content)
         print_success(f"已创建 cron: {cron_file}")
