@@ -109,8 +109,17 @@ def configure_smtp(old_config):
     """交互式配置 SMTP"""
     print_header("配置邮件通知")
 
-    # 检查是否已有 SMTP 配置
-    existing_smtp = old_config.get('default', {}).get('smtp')
+    # 检查是否已有 config.yaml 且包含 SMTP 配置
+    existing_smtp = None
+    if NEW_CONFIG_FILE.exists():
+        try:
+            with open(NEW_CONFIG_FILE, 'r') as f:
+                existing_config = yaml.safe_load(f)
+                if existing_config and existing_config.get('default', {}).get('smtp'):
+                    existing_smtp = existing_config['default']['smtp']
+        except Exception:
+            pass
+
     if existing_smtp:
         print_info("检测到现有 SMTP 配置:")
         print(f"  主机: {existing_smtp.get('host')}")
