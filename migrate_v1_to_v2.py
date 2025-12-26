@@ -318,15 +318,15 @@ def migrate_cert_dir(old_config):
                             if new_file.exists():
                                 # 检查文件内容是否相同
                                 if files_are_identical(old_file, new_file):
-                                        print(f"  [跳过] {new_filename} (已存在且内容相同)")
-                                        skipped = True
-                                        migrated = True
+                                    print(f"  [跳过] {new_filename} (已存在且内容相同)")
+                                    skipped = True
+                                    migrated = True
+                                    continue
+                                else:
+                                    print(f"  [存在] {new_filename}")
+                                    if not questionary.confirm(f"    覆盖已存在的文件？"):
+                                        print(f"    跳过 {old_file.name}")
                                         continue
-                                    else:
-                                        print(f"  [存在] {new_filename}")
-                                        if not questionary.confirm(f"    覆盖已存在的文件？"):
-                                            print(f"    跳过 {old_file.name}")
-                                            continue
                             shutil.copy(old_file, new_file)
                             print(f"  {old_file.name} -> {new_filename}")
                             migrated = True
