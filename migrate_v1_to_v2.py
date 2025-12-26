@@ -105,9 +105,29 @@ def parse_old_config():
     }
 
 
-def configure_smtp():
+def configure_smtp(old_config):
     """交互式配置 SMTP"""
     print_header("配置邮件通知")
+
+    # 检查是否已有 SMTP 配置
+    existing_smtp = old_config.get('default', {}).get('smtp')
+    if existing_smtp:
+        print_info("检测到现有 SMTP 配置:")
+        print(f"  主机: {existing_smtp.get('host')}")
+        print(f"  端口: {existing_smtp.get('port')}")
+        print(f"  发件人: {existing_smtp.get('sender')}")
+        if not questionary.confirm("是否保留现有配置并继续？").ask():
+            print_success("跳过 SMTP 配置")
+            return None
+        print()
+        return {
+            'host': existing_smtp.get('host'),
+            'port': existing_smtp.get('port'),
+            'sender': existing_smtp.get('sender'),
+            'username': existing_smtp.get('username'),
+            'password': existing_smtp.get('password'),
+            'use_ssl': existing_smtp.get('use_ssl'),
+        }
 
     if not questionary.confirm("是否配置 SMTP 邮件服务器用于发送证书更新通知？").ask():
         print_success("跳过 SMTP 配置")
@@ -444,7 +464,7 @@ def main():
     # 配置 SMTP
     smtp_config = None
     if not DRY_RUN:
-        smtp_config = configure_smtp()
+        smtp_config = configure_smtp(old_config)
 
     # 创建新配置
     create_config(old_config, smtp_config)
